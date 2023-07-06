@@ -8,7 +8,6 @@ params.javaheapsize = "64G"
 /*
   include processes 
 */
-include { fetchAndMapToRefGenomeSingle; fetchAndMapToRefGenomePaired } from './modules/fetchAndMap.nf'
 include { generateRefContigChunks; callVarsAndParents; collectCalls; filterCalls;  separateChromosomes; genSeqNameAndSNPfiles } from './modules/callVarsToLgs.nf'
 include { splitChromosomes } from './modules/refineLgs.nf'
 include { removeSmallAndJoinSingles; orderMarkers; chooseHighestLikelihoodOrdering; filterEndMarkers; reorderMarkersWithoutEndFiltered; storeFinalOrdering } from './modules/orderLgsMarkers'
@@ -28,8 +27,7 @@ params.maxlod = 30
 params.refinedmap = "map_refined.txt"
 
 
-
-    
+  
 params.runvars2lgs = true
 params.runsplitlgs = true
 params.runorder = true
@@ -53,27 +51,6 @@ workflow {
     }
 }
 
-
-/*
- Fetch data from ENA and map to reference genome
- UNDER CONSTRUCTION, fails occasionally 
- */
-workflow fastq2bams_wf {
-
-    // first column should contain the run names
-    run_ch = Channel.fromPath(params.run2indfile)
-                    .splitCsv()
-                    .map{ row -> row[0] }
-
-    // map to reference, single or paired-end reads 
-    if (params.fastqtype == 'single') {
-        fetchAndMapToRefGenomeSingle(run_ch)
-    } else if (params.fastqtype == 'paired') {
-        fetchAndMapToRefGenomePaired(run_ch)
-    } else {
-        error("Unknown fastq type")
-    }
-}
 
 
 /*
