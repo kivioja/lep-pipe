@@ -42,9 +42,16 @@ workflow {
     }
     if (params.runsplitlgs == true) {
         refinedmap_ch = split_lgs_wf(var_chs[0], var_chs[1])
-    }
+    }ß
     if (params.runorder == true) {
-        finalorders_chs = order_wf(var_chs[0], refinedmap_ch)
+        // if previous step not run assume that the files are already available
+        if (params.runsplitlgs == false) {
+            filteredparentcalls_ch = Channel.fromPath(params.mapdir + "/" + "data.call.filt.gz")  
+            refinedmap_ch = Channel.fromPath(params.mapdir + "/" + params.refinedmap)
+        } else {
+            filteredparentcalls_ch = var_chs[0]
+        }
+        finalorders_chs = order_wf(filteredparentcalls_ch, refinedmap_ch)
     }
     if (params.runanchor == true) {
         anchor_wf(finalorders_chs[0], finalorders_chs[1])
