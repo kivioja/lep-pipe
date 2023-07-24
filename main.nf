@@ -42,7 +42,7 @@ workflow {
     }
     if (params.runsplitlgs == true) {
         refinedmap_ch = split_lgs_wf(var_chs[0], var_chs[1])
-    }ß
+    }
     if (params.runorder == true) {
         // if previous step not run assume that the files are already available
         if (params.runsplitlgs == false) {
