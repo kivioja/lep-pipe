@@ -18,6 +18,7 @@ params.mappingfile = 'mapping.txt'
 params.sampleibd = false
 params.LepMap_numLowerCoverage = 0.3
 params.LepMap_minAlleleFreq = 0.1
+params.LepMap_lod3Mode = 1
 
 params.contigchunksize = 10
 
@@ -188,6 +189,7 @@ process	separateChromosomes {
   zcat $callfile | java -Xmx${params.javaheapsize} -cp ${params.lepmapdir} SeparateChromosomes2 data=- \
     samplePairs=${params.samplepairsfraction} \
     informativeMask=${params.informativemask} \
+    lod3Mode=${params.LepMap_lod3Mode} \
     distortionLod=1 lodLimit=${lodlim} numThreads=${params.numthreads} >map_${lodlim}.txt
   """
 
