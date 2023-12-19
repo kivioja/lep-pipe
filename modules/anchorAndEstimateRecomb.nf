@@ -4,31 +4,6 @@
   run Lep-Anchor  
 */
 
-// defaults
-params.numthreads = 16
-params.fixcontigs = false
-params.LepAnchor_minImprovement = 1 
-
-params.makechain = false
-params.makepaf = false
-
-params.anchordir = params.mapdir + "/" + "anchoring"
-params.anchorchaindir = params.mapdir + "/" + "anchoring_chained"
-params.anchorpafdir = params.mapdir + "/" + "anchoring_with_paf"
-params.recdensitydir = params.mapdir + "/" + "densities"
-
-lepanchorbinpath_ch = Channel.fromPath(params.lepanchordir + "/" + "bin")
-
-// defaults for estimation 
-params.gridsize = 1024
-params.numsamples = 5
-
-params.minsupport = 2
-params.minlength = 10000 
-
-params.endsupport = params.minsupport
-params.bandwidth = 0
-
 
 /*
  * Lep-Anchor through the wrapper
@@ -91,7 +66,7 @@ process fixContigs {
     // note: need to separate groovy and awk variables
     shell:
     """
-    java -Xmx${params.javaheapsize} -cp !{params.lepanchordir}/bin PlaceAndOrientContigs \
+    java !{params.jvmoptions} -Xmx!{params.javaheapsize} -cp !{params.lepanchordir}/bin PlaceAndOrientContigs \
         map=map_for_la.txt bed=map.bed chromosome=!{chrom} \
         findContigErrors=1 minImprovement=!{params.LepAnchor_minImprovement} \
         >map_chr_fix.la
@@ -161,11 +136,11 @@ process fitStepAndEstimateRecomb {
     script:
     if (params.bandwidth == 0) {
         """
-        java -cp ${params.lepanchordir}/bin FitStepFunction \
+        java ${params.jvmoptions} -cp ${params.lepanchordir}/bin FitStepFunction \
             intervals=map_for_la.liftover.txt \
             map=map_for_step.liftover.txt \
             chromosome=${chrom} >fit${chrom}.txt
-        java -cp ${params.lepanchordir}/bin EstimateRecombination \
+        java ${params.jvmoptions} -cp ${params.lepanchordir}/bin EstimateRecombination \
             gridSize=${params.gridsize} \
             numSamples=${params.numsamples} \
             minSupport=${params.minsupport} \
@@ -177,11 +152,11 @@ process fitStepAndEstimateRecomb {
         """
     } else {
         """
-        java -cp ${params.lepanchordir}/bin FitStepFunction \
+        java ${params.jvmoptions} -cp ${params.lepanchordir}/bin FitStepFunction \
             intervals=map_for_la.liftover.txt \
             map=map_for_step.liftover.txt \
             chromosome=${chrom} >fit${chrom}.txt
-        java -cp ${params.lepanchordir}/bin EstimateRecombination \
+        java ${params.jvmoptions} -cp ${params.lepanchordir}/bin EstimateRecombination \
             gridSize=${params.gridsize} \
             numSamples=${params.numsamples} \
             minSupport=${params.minsupport} \

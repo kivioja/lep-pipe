@@ -2,34 +2,8 @@
 nextflow.enable.dsl=2
 
 /*
-  do the variant calling and use variants to check the parents 
+  do the variant calling and separate to chromosomes
 */
-
-params.bamtemplate = '/something/*.bam'
-params.bamdir = 'somepath/'
-params.mapdir = 'somepath/'
-
-params.numthreads = 4
-
-// default file names
-params.mappingfile = 'mapping.txt'
-
-// other defaults
-params.sampleibd = false
-params.LepMap_numLowerCoverage = 0.3
-params.LepMap_minAlleleFreq = 0.1
-params.LepMap_lod3Mode = 1
-
-params.contigchunksize = 10
-
-params.samplepairsfraction = 1
-
-params.xlimit = "inf"
-params.zlimit = "inf"
-params.halfsibs = 0
-
-params.informativemask = "0123"
-params.datatolerance = 0.001 
 
 
 /*
@@ -71,15 +45,16 @@ process callVarsAndParents {
       perl -ple 's{^}{${params.bamdir}/}' >bamlist.txt
       cut -f 2 -d ',' $bam2ind  > mapping.txt
     samtools mpileup -l $contigchunk -q 10 -Q 10 -s --bam-list bamlist.txt | \
-      java -cp ${params.lepmapdir} Pileup2Likelihoods \
+      java ${params.jvmoptions} -cp ${params.lepmapdir} Pileup2Likelihoods \
       numLowerCoverage=${params.LepMap_numLowerCoverage} \
       minAlleleFreq=${params.LepMap_minAlleleFreq} \
       mappingFile=mapping.txt | gzip  > chunkpost
-    zcat chunkpost | java -cp ${params.lepmapdir} ParentCall2 \
+    zcat chunkpost | java ${params.jvmoptions} -cp ${params.lepmapdir} ParentCall2 \
 	    data=${ped} \
 	    posteriorFile=- \
       halfSibs=${params.halfsibs} \
-      removeNonInformative=1 | gzip >data.chunk.call
+      removeNonInformative=${params.removeNonInformative} | gzip >data.chunk.call
+    #perl /scratch/project_2005425/TEST/check_errors.pl < .command.err
     """
   } else if (params.xlimit != "inf") {
     """
@@ -87,16 +62,16 @@ process callVarsAndParents {
       perl -ple 's{^}{${params.bamdir}/}' >bamlist.txt
       cut -f 2 -d ',' $bam2ind  > mapping.txt
     samtools mpileup -l $contigchunk -q 10 -Q 10 -s --bam-list bamlist.txt | \
-      java -cp ${params.lepmapdir} Pileup2Likelihoods \
+      java ${params.jvmoptions} -cp ${params.lepmapdir} Pileup2Likelihoods \
       numLowerCoverage=${params.LepMap_numLowerCoverage} \
       minAlleleFreq=${params.LepMap_minAlleleFreq} \
       mappingFile=mapping.txt | gzip  > chunkpost
-    zcat chunkpost | java -cp ${params.lepmapdir} ParentCall2 \
+    zcat chunkpost | java ${params.jvmoptions} -cp ${params.lepmapdir} ParentCall2 \
 	    data=${ped} \
 	    posteriorFile=- \
       XLimit=${params.xlimit} \
       halfSibs=${params.halfsibs} \
-      removeNonInformative=1 | gzip >data.chunk.call
+      removeNonInformative=${params.removeNonInformative} | gzip >data.chunk.call
     """
   } else if (params.zlimit != "inf") {
     """
@@ -104,16 +79,16 @@ process callVarsAndParents {
       perl -ple 's{^}{${params.bamdir}/}' >bamlist.txt
       cut -f 2 -d ',' $bam2ind  > mapping.txt
     samtools mpileup -l $contigchunk -q 10 -Q 10 -s --bam-list bamlist.txt | \
-      java -cp ${params.lepmapdir} Pileup2Likelihoods \
+      java ${params.jvmoptions} -cp ${params.lepmapdir} Pileup2Likelihoods \
       numLowerCoverage=${params.LepMap_numLowerCoverage} \
       minAlleleFreq=${params.LepMap_minAlleleFreq} \
       mappingFile=mapping.txt | gzip  > chunkpost
-    zcat chunkpost | java -cp ${params.lepmapdir} ParentCall2 \
+    zcat chunkpost | java ${params.jvmoptions} -cp ${params.lepmapdir} ParentCall2 \
 	    data=${ped} \
 	    posteriorFile=- \
       ZLimit=${params.zlimit} \
       halfSibs=${params.halfsibs} \
-      removeNonInformative=1 | gzip >data.chunk.call
+      removeNonInformative=${params.removeNonInformative} | gzip >data.chunk.call
     """
   } else { 
       error "Could not figure out X/Z limits"
@@ -162,7 +137,7 @@ process	filterCalls {
 
   script:
   """
-  zcat data.call.gz | java -cp ${params.lepmapdir} Filtering2 dataTolerance=${params.datatolerance} data=- | \
+  zcat data.call.gz | java ${params.jvmoptions} -cp ${params.lepmapdir} Filtering2 dataTolerance=${params.datatolerance} data=- | \
     filter_consecutive_pos_markers.pl | gzip >data.call.filt.gz
   """
 
@@ -186,7 +161,7 @@ process	separateChromosomes {
 
   script:
   """
-  zcat $callfile | java -Xmx${params.javaheapsize} -cp ${params.lepmapdir} SeparateChromosomes2 data=- \
+  zcat $callfile | java ${params.jvmoptions} -Xmx${params.javaheapsize} -cp ${params.lepmapdir} SeparateChromosomes2 data=- \
     samplePairs=${params.samplepairsfraction} \
     informativeMask=${params.informativemask} \
     lod3Mode=${params.LepMap_lod3Mode} \
@@ -196,33 +171,6 @@ process	separateChromosomes {
 }
 
 
-/* 
- * IBD calculation, should take sample (10%) if large number of markers (> 100,000) 
- */
-process calcRelatedness {
-  
-  publishDir params.mapdir, mode: 'copy', overwrite: true
-
-  input:
-  file 'post.gz' 
-
-  output:
-  file 'ibd.txt'
-
-  script:
-  if (params.sampleibd == true) 
-    """
-    zcat post.gz | awk '{if (NR==1) {print} else if (rand()<${params.sampleibdfraction}) print}' | \
-      java -Xmx${params.javaheapsize} -cp ${params.lepmapdir} IBD posteriorFile=- \
-      numThreads=${params.numthreads} > ibd.txt
-    """
-  else  
-    """
-    zcat -Xmx${params.javaheapsize} post.gz | java -cp ${params.lepmapdir} IBD posteriorFile=- \
-      numThreads=${params.numthreads} > ibd.txt
-    """
-
-}
 
 
 /* 

@@ -1,0 +1,31 @@
+BootStrap: docker
+From: ubuntu:22.04
+
+%files
+  leptools /opt
+  software/bwa-mem2-2.2.1_x64-linux/bwa-mem2* /usr/local/bin
+  software/seqkit /usr/local/bin
+  software/ena-file-downloader/ /opt
+  scripts/*.pl /usr/local/bin
+  scripts/*.R /opt/scripts/
+
+%post
+  export DEBIAN_FRONTEND=noninteractive
+  chmod -R a+rX /opt/
+  chmod a+rx /usr/local/bin/*
+  apt-get update && apt-get install -y default-jre
+  apt-get install -y samtools
+  apt-get install -y perl-modules-5.34
+  apt-get install -y r-base
+  apt-get install -y r-cran-scales
+  apt-get install -y r-cran-optparse
+  apt-get install -y gawk
+  apt-get install -y bedtools
+
+%environment
+
+%runscript
+   java -cp /opt/leptools/lep-map3-code/bin/ ParentCall2
+
+%labels
+   Author Teemu Kivioja

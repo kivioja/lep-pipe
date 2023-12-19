@@ -5,16 +5,6 @@
   example
 */
 
-// no splitting by default
-params.splitchromosomes = "()"
-params.splitlimits = "()"
-params.LepMap_lodLimitRefine = 0
-
-// no sampling by default
-params.samplepairsfraction = 1
-
-// other defaults
-params.numthreads = 4
 
 
 /*
