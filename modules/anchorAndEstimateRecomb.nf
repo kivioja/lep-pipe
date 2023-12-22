@@ -89,12 +89,14 @@ process fixContigs {
 /*
  * Lift-over the maps to the linkage group coordinates 
  * - use the fixed contigs, need to collect to one agp file first
+ * - use the agp file to generate a new genome fasta file too
  */
 process liftOverMaps {
 
     publishDir params.recdensitydir, mode: 'copy', overwrite: true
 
     def fixed_agp_name = params.species + "_LAfixed.agp"
+    def fixed_genome_name = params.species + "_LAfixed.fa"
 
     input:
     file 'fixed_chr*.agp'
@@ -105,6 +107,7 @@ process liftOverMaps {
     file "$fixed_agp_name"
     file "map_for_la.liftover.txt"
     file "map_for_step.liftover.txt"
+    file "$fixed_genome_name"
 
     // lift-over of input files to linkage group coordinates for fitting
     // awk [-vinverse=1] -f liftover.awk ref.agp chr_pos_file >chr_pos_file.liftover
@@ -113,6 +116,9 @@ process liftOverMaps {
     cat fixed_chr*.agp | sort -k1,1 -k2,2n > $fixed_agp_name
     awk -f ${params.lepanchordir}/liftover.awk $fixed_agp_name map_for_la.txt >map_for_la.liftover.txt
     awk -f ${params.lepanchordir}/liftover.awk $fixed_agp_name map_for_step.txt >map_for_step.liftover.txt
+    seqkit seq -i $params.refgenome > tmpgenome.fa
+    agptools assemble tmpgenome.fa $fixed_agp_name > $fixed_genome_name
+    rm tmpgenome.fa
     """
 }
 

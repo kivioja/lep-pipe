@@ -1,6 +1,10 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
+/*
+ MAIN workflow for generating linkage maps
+ assumes that bams already exist (see seq_fw to create those)
+*/
 
 // set default parameter values
 // (needs to be before includes: https://training.nextflow.io/basic_training/modules/#parameter-scopes)
@@ -14,6 +18,7 @@ include { removeSmallAndJoinSingles; orderMarkers; storeFinalOrdering } from './
 include { runAnchorWrapper; fixContigs; liftOverMaps; fitStepAndEstimateRecomb } from './modules/anchorAndEstimateRecomb.nf'
 
 // which steps to run
+// can start from either from beginning or from runorder (if first 2 steps already done)
 params.runvars2lgs = true
 params.runsplitlgs = true
 params.runorder = true

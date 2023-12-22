@@ -2,35 +2,101 @@
 nextflow.enable.dsl=2
 
 /*
-  do the variant calling and use variants to check the parents 
-  TODO: reduce disk usage
-*/
+ * do the variant calling and use variants to check the parents 
+ */
 
-params.numthreads = 4
+params.outdir = params.mapdir + "/" + "features"
 
 /* 
-  parse parent calls and lift over to new genome coordinates  
-*/
-
-process calcNucDiversity {
+ * Make the windows in which the features are counted and count basic features
+ */
+process makeGenomeWindows {
+  publishDir params.outdir, mode: 'copy', overwrite: true
 
   input:
-  each parentcall
-  path bam2ind
-  path agpfile
+  val infiletemplate
+  val bedoutfile
+  val recoutfile
+  val windowsize
 
   output:
-  path 'result.bed'
+  path "$bedoutfile"
+  path "$recoutfile"
 
   script:
   """
-  zcat $parentcall | head -n 7 > call_header.ped 
-  zcat $parentcall | tail -n +8 | cut -f 1,2 > post.pos.txt
-  awk -f ${params.lepanchordir}/liftover.awk $agpfile post.pos.txt > post.liftover.pos.txt
-  zcat $parentcall | perl ${params.scriptdir}/parse_parent_calls.pl \
-    call_header.ped post.pos.txt post.liftover.pos.txt >result.bed
+  Rscript ${params.scriptdir}/collectMareyWindowsBed.R \
+    -n $params.chromnum \
+    -w $windowsize \
+    -i $infiletemplate \
+    -b $bedoutfile \
+    -r $recoutfile   
   """
+}
 
+
+
+/*
+ * Count the basic sequence features in the genomic windows 
+ */
+process countWindowSeqFeatures {
+  publishDir params.outdir, mode: 'copy', overwrite: true
+  
+  input:
+  path windowbed
+  path genomefasta
+  val seqfeatcountfile
+
+  output:
+  path "$seqfeatcountfile"
+ 
+  script:
+  """
+  seqkit subseq --bed $windowbed $genomefasta > tmpseqfile.fa
+  seqtk comp tmpseqfile.fa >testout.txt
+  seqtk comp tmpseqfile.fa | perl -ple 's/^(LG\\d+)_(\\d+)-(\\d+):\\./\$1\\t\$2\\t\$3/' >$seqfeatcountfile
+  """  
+}
+
+
+
+/* 
+ * Call and parse to bed all variants, not only the ones useful for linkage mapping
+ * and lift to chromosome coordinates
+ * - long pipe to avoid huge temporary files
+ * TODO: add more parent calling options?
+ */ 
+process callToBedAllParentVars {
+ 
+  input:
+  each path(contigchunk)
+  path bam2ind
+  path ped
+  path agpfile
+
+  output:
+  path 'result.bed.gz'
+
+  script:
+  """
+  cut -f 1 -d ',' $bam2ind | \
+  perl -ple 's{^}{${params.bamdir}/}' >bamlist.txt
+  cut -f 2 -d ',' $bam2ind  > mapping.txt
+  samtools mpileup -l $contigchunk -q 10 -Q 10 -s --bam-list bamlist.txt | \
+    java ${params.jvmoptions} -cp ${params.lepmapdir} Pileup2Likelihoods \
+      numLowerCoverage=${params.LepMap_numLowerCoverage} \
+      minAlleleFreq=0.0 \
+      mappingFile=mapping.txt | \
+    java ${params.jvmoptions} -cp ${params.lepmapdir} ParentCall2 \
+	    data=${ped} \
+	    posteriorFile=- \
+      halfSibs=${params.halfsibs} \
+      removeNonInformative=0 | \
+  parse_parent_calls.pl $ped | gzip >result.contig.txt.gz
+  awk -f ${params.lepanchordir}/liftover.awk $agpfile <(zcat result.contig.txt.gz) | \
+    awk -v OFS='\t' '{print \$1, \$2-1, \$2, \$3, \$4}' | gzip > result.bed.gz  
+  rm result.contig.txt.gz
+  """ 
 }
 
 
@@ -41,23 +107,24 @@ process calcNucDiversity {
   - count for individual in each window
     the number heterozygous and homozygous sites 
 */
-process collectNucDiversities {
+process collectParentVariantWindowCounts {
 
   publishDir params.outdir, mode: 'copy', overwrite: true
 
   input:
-  path 'parent_calls*.bed'
+  path 'parent_calls*.bed.gz'
   path 'intervals.bed'
+  val countoutfile
 
   output:
-  path 'parent_calls_interval_counts.txt'
+  path "$countoutfile"
 
   script:
   """
   sort -k1,1 -k2,2n intervals.bed >intervals_sorted.bed
-  sort -k1,1 -k2,2n -T ${params.bigtempdir} parent_calls*.bed | \
+  zcat parent_calls*.bed.gz | sort -k1,1 -k2,2n -T ${params.bigtempdir} | \
     bedtools intersect -sorted -wo -a intervals_sorted.bed -b - | cut -f 1-3,7-8 | \
-    sort -k1,1 -k2,2n -k4,4 -k5,5 -T ${params.bigtempdir}| uniq -c >parent_calls_interval_counts.txt  
+    sort -k1,1 -k2,2n -k4,4 -k5,5 -T ${params.bigtempdir}| uniq -c > $countoutfile  
   """
 }
 
