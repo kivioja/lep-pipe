@@ -53,8 +53,9 @@ process countWindowSeqFeatures {
   script:
   """
   seqkit subseq --bed $windowbed $genomefasta > tmpseqfile.fa
-  seqtk comp tmpseqfile.fa >testout.txt
-  seqtk comp tmpseqfile.fa | perl -ple 's/^(LG\\d+)_(\\d+)-(\\d+):\\./\$1\\t\$2\\t\$3/' >$seqfeatcountfile
+  #seqtk comp tmpseqfile.fa | perl -ple 's/^(LG\\d+)_(\\d+)-(\\d+):\\./\$1\\t\$2\\t\$3/' >$seqfeatcountfile
+  faCount -dinuc -strands tmpseqfile.fa >$seqfeatcountfile
+  rm tmpseqfile.fa
   """  
 }
 

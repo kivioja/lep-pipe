@@ -3,11 +3,14 @@ From: ubuntu:22.04
 
 %files
   leptools /opt
+  software/sratoolkit.3.1.0-ubuntu64/ /opt
   software/bwa-mem2-2.2.1_x64-linux/bwa-mem2* /usr/local/bin
   software/seqkit /usr/local/bin
+  software/faCount /usr/local/bin
   software/ena-file-downloader/ /opt
   scripts/*.pl /usr/local/bin
   scripts/*.R /opt/scripts/
+  scripts/*.awk /opt/scripts/
 
 %post
   export DEBIAN_FRONTEND=noninteractive
@@ -21,8 +24,15 @@ From: ubuntu:22.04
   apt-get install -y r-cran-optparse
   apt-get install -y gawk
   apt-get install -y bedtools
+  apt-get install -y seqtk
+  apt-get install -y git
+  apt-get install -y python3-pip
+  git clone https://github.com/esrice/agptools.git
+  cd agptools
+  pip install .
 
 %environment
+  export PATH=$PATH:/opt/sratoolkit.3.1.0-ubuntu64/bin
 
 %runscript
    java -cp /opt/leptools/lep-map3-code/bin/ ParentCall2

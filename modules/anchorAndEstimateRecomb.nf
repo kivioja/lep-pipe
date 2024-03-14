@@ -137,6 +137,7 @@ process fitStepAndEstimateRecomb {
     file "fit${chrom}.txt"
     file "estimates${chrom}.txt"
     file "density${chrom}.txt"
+    file "crossovers${chrom}.txt"
     
 
     script:
@@ -155,6 +156,7 @@ process fitStepAndEstimateRecomb {
             crossValidate=1 \
             map=fit${chrom}.txt >estimates${chrom}.txt
         grep 'density' estimates${chrom}.txt >density${chrom}.txt
+        awk -f ${params.scriptdir}/numRec3.awk fit${chrom}.txt >crossovers${chrom}.txt
         """
     } else {
         """
@@ -171,6 +173,87 @@ process fitStepAndEstimateRecomb {
             bandwidth=${params.bandwidth} \
             map=fit${chrom}.txt >estimates${chrom}.txt
         grep 'density' estimates${chrom}.txt >density${chrom}.txt
+        awk -f ${params.scriptdir}/numRec3.awk fit${chrom}.txt >crossovers${chrom}.txt
         """
     } 
+}
+
+
+
+/*
+ * evaluate markers in the physical order, do not change order, 
+ * and estimate recombination
+ */
+process evaluateOrderAndEstimateRecomb {
+  publishDir params.recdensitydir, mode: 'copy', overwrite: true 
+ 
+  input:
+  path 'snps.txt'
+  path callsfile
+  path finalmap 
+  each chrom 
+
+  output:
+  path "order${chrom}_phys_eval_coords.txt"
+  path "estimates${chrom}.txt"
+  path "density${chrom}.txt"
+
+  // The input file that has markers in physical order is done like shown in Lep-Anchor documentation 
+  // except that the marker number is stored to .input file in the first step so that 
+  // it carries to .phys file that is then be used after the evaluation to 
+  // get the linkage group coordinates back  
+  script:
+  """
+  awk -vn=${chrom} '(NR==FNR){map[NR-1]=\$0}(NR!=FNR){\$1=map[\$1] "\t" \$1 "\t";print}' snps.txt ${params.mapdir}/orders/order${chrom}.int >order${chrom}.input
+  awk -f ${params.lepanchordir}/liftover ${params.mapdir}/anchoring/fixed_chr${chrom}.agp order${chrom}.input | sort -V | grep LG >order${chrom}.liftover
+  awk -vinverse=1 -f ${params.lepanchordir}/liftover ${params.mapdir}/anchoring/fixed_chr${chrom}.agp order${chrom}.liftover | \
+    awk '(NR==FNR){m[\$1"\t"(\$2+0)]=NR-1}(NR!=FNR){print m[\$1"\t"(\$2+0)]}' snps.txt - >order${chrom}.phys
+  zcat $callsfile | java ${params.jvmoptions} -Xmx${params.javaheapsize} -cp ${params.lepmapdir} OrderMarkers2 data=- \
+    useMorgan=1 \
+    scale=${params.scale} \
+    proximityScale=${params.proximityscale} \
+    evaluateOrder=order${chrom}.phys improveOrder=0 outputPhasedData=2 phasingIterations=3 \
+    map=${finalmap} chromosome=$chrom calculateIntervals=order_${chrom}_phys_eval.int \
+    >order${chrom}_phys_eval.txt
+  marker_nums_to_coords.pl order${chrom}.liftover < order${chrom}_phys_eval.txt >order${chrom}_phys_eval_coords.txt
+  java ${params.jvmoptions} -cp ${params.lepanchordir}/bin EstimateRecombination \
+    gridSize=${params.gridsize} \
+    numSamples=${params.numsamples} \
+    minSupport=${params.minsupport} \
+    endSupport=${params.endsupport} \
+    minLength=${params.minlength} \
+    crossValidate=1 \
+    map=order${chrom}_phys_eval_coords.txt >estimates${chrom}.txt
+  grep 'density' estimates${chrom}.txt >density${chrom}.txt
+  awk -f ${params.scriptdir}/numRec3.awk order${chrom}_phys_eval_coords.txt >crossovers${chrom}.txt
+  """
+}
+
+
+
+
+process estimateGammaModel {
+
+    publishDir params.gammamodeldir, mode: 'copy', overwrite: true
+
+    input:
+    each chrom
+    path "*"
+
+    output:
+    file "estimates${chrom}.txt"
+    
+    script:
+    """
+    java ${params.jvmoptions} -cp ${params.lepanchordir}/bin EstimateRecombination \
+        gammaModel=${params.gammamodel} \
+        gridSize=${params.gridsize} \
+        numSamples=${params.numsamples} \
+        minSupport=${params.minsupport} \
+        endSupport=${params.endsupport} \
+        minLength=${params.minlength} \
+        crossValidate=1 \
+        map=fit${chrom}.txt >estimates${chrom}.txt
+    """
+
 }

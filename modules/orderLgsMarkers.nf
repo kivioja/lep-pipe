@@ -63,14 +63,26 @@ process orderMarkers {
   path "order_${chrom}_${attempt}.int"
 
   script:
-  """
-  zcat $callsfile | java ${params.jvmoptions} -Xmx${params.javaheapsize} -cp ${params.lepmapdir} OrderMarkers2 data=- \
-    useMorgan=1 \
-    scale=${params.scale} \
-    proximityScale=${params.proximityscale} \
-    map=${finalmap} chromosome=$chrom calculateIntervals=order_${chrom}_${attempt}.int \
-    numThreads=${params.numthreads} >order_${chrom}_${attempt}.txt
-  """
+  if (params.nofemalerecomb == false) {
+    """
+    zcat $callsfile | java ${params.jvmoptions} -Xmx${params.javaheapsize} -cp ${params.lepmapdir} OrderMarkers2 data=- \
+      useMorgan=1 \
+      scale=${params.scale} \
+      proximityScale=${params.proximityscale} \
+      map=${finalmap} chromosome=$chrom calculateIntervals=order_${chrom}_${attempt}.int \
+      numThreads=${params.numthreads} >order_${chrom}_${attempt}.txt
+    """
+  } else {
+    """
+    zcat $callsfile | java ${params.jvmoptions} -Xmx${params.javaheapsize} -cp ${params.lepmapdir} OrderMarkers2 data=- \
+      useMorgan=1 \
+      scale=${params.scale} \
+      proximityScale=${params.proximityscale} \
+      recombination2=0 \
+      map=${finalmap} chromosome=$chrom calculateIntervals=order_${chrom}_${attempt}.int \
+      numThreads=${params.numthreads} >order_${chrom}_${attempt}.txt
+    """
+  }
 }
 
 
@@ -108,4 +120,8 @@ process storeFinalOrdering {
       snps.txt order\$X.txt; done >map_for_step.txt      
   """
 }
+
+
+
+
 

@@ -221,6 +221,10 @@ def setParamDefaults() {
     // use the same as for separating chrom
     params.joinsingleslimit = params.LepMap_lodLimit
 
+    // set true for species like some butteflies such that there is no 
+    // recombination in females
+    params.nofemalerecomb = false
+
     //
     // anchorAndEstimateRecomb
     //
