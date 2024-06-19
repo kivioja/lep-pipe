@@ -3,6 +3,7 @@ nextflow.enable.dsl=2
 /*
   Do only the Lep-Anchor fit and estimation
   - fit step function and estimate: linkage map given as input or, for example different parameters than standard
+  - evaluate in physical order instead of fitting step function
   - estimate gamma model: fit given as input
  */
 
@@ -36,20 +37,27 @@ params.endsupport = params.minsupport
 params.bandwidth = 0
 
 params.evaluateorder = false
+params.evaluatereforder = false
 params.newfit = false
+params.reffit = false
 params.gammamodel = 0
+params.nofemalerecomb = false
 
+params.lg2refchrom = ""
+params.refseq2refchrom = ""
 
 /*
   include processes 
 */
-include { fitStepAndEstimateRecomb; evaluateOrderAndEstimateRecomb; estimateGammaModel } from './modules/anchorAndEstimateRecomb.nf'
+include { fitStepAndEstimateRecomb; fitStepReferenceAndEstimateRecomb; evaluateOrderAndEstimateRecomb; evaluateReferenceOrderAndEstimateRecomb; estimateGammaModel } from './modules/anchorAndEstimateRecomb.nf'
   
 
 workflow {
 
   def chroms = 1..params.chromnum  
 
+  
+  // Evaluate map in the physical order, uses Lep-Anchor output as default
   if (params.evaluateorder == true) {
 
     snps_ch = Channel.fromPath(params.snpfile)
@@ -59,13 +67,54 @@ workflow {
     orderevals_ch = evaluateOrderAndEstimateRecomb(snps_ch, calls_ch, map_ch, chroms)
   }
 
+  // Evaluate map in physical order defined by the reference, use its chromosome names
+  if (params.evaluatereforder == true) {
 
+    // read the mapping from Lep-Map linkage group numbers to reference chromosome numbers
+    // note: each does not handle tuples, so creating one combined input channel
+    lg2chrom_ch =  Channel.fromPath(params.lg2refchrom)
+                          .splitCsv(sep: "\t")
+                          .map { row-> tuple(row[0], row[1]) }
+   
+    snps_ch = Channel.fromPath(params.snpfile)
+    calls_ch =  Channel.fromPath(params.callsfile)
+    map_ch = Channel.fromPath(params.finalmapfile)
+
+    ch2 = lg2chrom_ch.combine(snps_ch)
+    ch3 = ch2.combine(calls_ch)
+    combined_ch = ch3.combine(map_ch)
+
+    //combined_ch.view()
+    orderevals_ch = evaluateReferenceOrderAndEstimateRecomb(combined_ch)
+  }
+
+
+  // Fit step function and estimate, uses linkage map names 
   if (params.newfit == true) {
 
     mapforla_ch = Channel.fromPath(params.mapforlafile)
     mapforstep_ch = Channel.fromPath(params.mapforstepfile)   
  
     estimate_chs = fitStepAndEstimateRecomb(mapforla_ch, mapforstep_ch, chroms)
+  }
+
+
+  // Fit step function and estimate, use reference genome names
+  if (params.reffit == true) {
+
+    // read the mapping from Lep-Map linkage group numbers to reference chromosome numbers
+    // note: each does not handle tuples, so creating one combined input channel
+    lg2chrom_ch =  Channel.fromPath(params.lg2refchrom)
+                          .splitCsv(sep: "\t")
+                          .map { row-> tuple(row[0], row[1]) }
+  
+    mapforla_ch = Channel.fromPath(params.mapforlafile)
+    mapforstep_ch = Channel.fromPath(params.mapforstepfile)   
+
+    ch2 = lg2chrom_ch.combine(mapforla_ch)
+    combined_ch = ch2.combine(mapforstep_ch)
+
+    estimate_chs = fitStepReferenceAndEstimateRecomb(combined_ch)
   }
 
 
