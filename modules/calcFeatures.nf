@@ -2,10 +2,12 @@
 nextflow.enable.dsl=2
 
 /*
- * do the variant calling and use variants to check the parents 
+ * calculate sequence features
+ * and get interference in genomic windows
  */
 
 params.outdir = params.mapdir + "/" + "features"
+params.interferencedir = params.mapdir + "/" + "interference"
 
 /* 
  * Make the windows in which the features are counted and count basic features
@@ -58,6 +60,54 @@ process countWindowSeqFeatures {
   rm tmpseqfile.fa
   """  
 }
+
+
+/*
+ * Calculate the basic sequence features and bendability in the genomic windows 
+ */
+process calcWindowFeatures {
+  publishDir params.featoutdir, mode: 'copy', overwrite: true
+  
+  input:
+  path windowbed
+  path genomefasta
+  val seqfeatcountfile
+  val seqbendscorefile
+
+  output:
+  path "$seqfeatcountfile"
+  path "$seqbendscorefile"
+
+  script:
+  """
+  seqkit subseq --bed $windowbed $genomefasta > tmpseqfile.fa
+  faCount -dinuc -strands tmpseqfile.fa > $seqfeatcountfile
+  calc_bendability.pl tmpseqfile.fa > $seqbendscorefile
+  rm tmpseqfile.fa
+  """  
+}
+
+
+/*
+ * run the script that parses the interfence output to discrete window format
+ */
+process getWindowInterference {
+  publishDir params.interferencedir, mode: 'copy', overwrite: true
+  
+  input:
+  val estfiletemplate
+  each chrom
+  val windowsize
+
+  output:
+  path "interference_${windowsize}_windows_${chrom}.tsv"
+
+  script:
+  """
+  awk -v numBins2=${windowsize} -f ${params.scriptdir}/calcInterference.awk ${estfiletemplate}${chrom}.txt > interference_${windowsize}_windows_${chrom}.tsv
+  """  
+}
+
 
 
 

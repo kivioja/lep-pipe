@@ -10,13 +10,18 @@ params.javaheapsize = "64G"
 
 params.halfsibs = 0
 params.LepMap_numLowerCoverage = 0.3
-params.runvars = true
+params.sampledir = ""
+
+params.makewindows = true
+params.getinterference = false
+params.runvars = false
+params.runoldcounts = false
 
 /*
   include processes 
 */
 include { generateRefContigChunks; callVarsAndParents } from './modules/callVarsToLgs.nf'
-include { makeGenomeWindows; countWindowSeqFeatures; callToBedAllParentVars; collectParentVariantWindowCounts } from './modules/calcFeatures.nf'
+include { makeGenomeWindows; countWindowSeqFeatures; calcWindowFeatures; getWindowInterference; callToBedAllParentVars; collectParentVariantWindowCounts } from './modules/calcFeatures.nf'
   
 // default file names
 // - pi calculated from the parents but children aid in parent variant calling
@@ -35,11 +40,31 @@ workflow {
   bedoutfile = params.species + "_marey_" + params.windowsize + "_windows.bed"
   recoutfile = params.species + "_marey_" + params.windowsize + "_windows.tsv"
 
-  windows_ch = makeGenomeWindows(params.estfiletemplate, bedoutfile, recoutfile, params.windowsize)
+  if (params.makewindows == true) {
+    windows_ch = makeGenomeWindows(params.estfiletemplate, bedoutfile, recoutfile, params.windowsize)
+    windowsfile = windows_ch[0]
+  } else {
+    windowsfile = params.genomewindowfile
+  }
 
   // basic sequence features like GC-content
   featoutcountfile =  params.species + "_seq_feat_counts_" + params.windowsize + "_windows.tsv"
-  feats_ch = countWindowSeqFeatures(windows_ch[0], params.fixedgenome, featoutcountfile)
+  // bending scores
+  bendscorefile =  params.species + "_bending_scores_" + params.windowsize + "_windows.tsv"
+
+  // old, only basic 
+  if (params.runoldcounts == true) {
+    feats_ch = countWindowSeqFeatures(windowsfile, params.fixedgenome, featoutcountfile)
+  }
+  // new, bending too
+  feats_ch = calcWindowFeatures(windowsfile, params.fixedgenome, 
+                                featoutcountfile, bendscorefile)
+
+  // run window interference script for each chromosome estimate file
+  if (params.getinterference == true) {
+    def chroms = 1..params.chromnum
+    interference_ch = getWindowInterference(params.estfiletemplate, chroms, params.windowsize)
+  }
 
   if (params.runvars == true) {
     // pi estimation needs also non-variant positions, thus    
@@ -53,7 +78,7 @@ workflow {
     parentcallchunks_ch = callToBedAllParentVars(contigchunks_ch, bam2ind_ch, ped_ch, agp_ch)
 
     varcountoutfile = params.species + "_parent_var_counts_" + params.windowsize + "_windows.tsv"
-    cout_ch = collectParentVariantWindowCounts(parentcallchunks_ch.collect(), windows_ch[0], varcountoutfile)
+    cout_ch = collectParentVariantWindowCounts(parentcallchunks_ch.collect(), windowsfile, varcountoutfile)
   }
 }
 
